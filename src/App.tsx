@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { Provider } from 'react-redux'
 import { store } from './store/store'
-import MoviesList from './components/moviesList/MoviesList'
+import MoviesList from './components/moviesList/MoviesList.tsx'
 import './App.css'
 import MovieDetailsWrapper from './components/movieDetails/MovieDetailsWrapper'
 
