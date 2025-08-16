@@ -4,6 +4,22 @@ import userEvent from '@testing-library/user-event'
 import { renderWithProviders, mockMovie, mockInitialState } from '../../../test/test-utils'
 import MovieModal from '../MovieModal'
 
+// Mock Redux async thunks
+vi.mock('../../../store/moviesSlice', async () => {
+  const actual = await vi.importActual('../../../store/moviesSlice')
+  return {
+    ...actual,
+    addMovieAsync: vi.fn(() => ({
+      type: 'movies/addMovieAsync/pending',
+      unwrap: vi.fn(() => Promise.resolve({ id: 1, title: 'New Movie' }))
+    })),
+    editMovieAsync: vi.fn(() => ({
+      type: 'movies/editMovieAsync/pending', 
+      unwrap: vi.fn(() => Promise.resolve({ id: 1, title: 'Updated Movie' }))
+    }))
+  }
+})
+
 describe('MovieModal', () => {
   const mockOnClose = vi.fn()
 

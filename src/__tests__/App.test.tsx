@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import { renderWithProviders, mockInitialState } from '../test/test-utils'
 import { Routes, Route } from 'react-router-dom'
-import MoviesList from '../components/moviesList/MoviesList'
+import MoviesList from '../components/moviesList/MoviesList.tsx'
 import MovieDetailsWrapper from '../components/movieDetails/MovieDetailsWrapper'
 
 // Mock the child components
