@@ -13,6 +13,9 @@ export interface MoviesState {
   favoriteMovieIds: number[]
   currentUsername: string
   favorites: Movie[]
+  searchResults: Movie[]
+  isSearching: boolean
+  allMovies: Movie[] // Store all movies for favorites filtering
 }
 
 // Initial state
@@ -26,6 +29,9 @@ const initialState: MoviesState = {
   favoriteMovieIds: [],
   currentUsername: '',
   favorites: [],
+  searchResults: [],
+  isSearching: false,
+  allMovies: [],
 }
 
 // Async thunk for fetching movies
@@ -107,7 +113,18 @@ export const removeFromFavoritesAsync = createAsyncThunk(
 export const searchMoviesAsync = createAsyncThunk(
   'movies/searchMovies',
   async (searchTerm: string) => {
+    if (!searchTerm.trim()) {
+      return [];
+    }
     return await moviesApi.searchMovies(searchTerm);
+  }
+)
+
+// Async thunk for clearing search (getting all movies)
+export const clearSearchAsync = createAsyncThunk(
+  'movies/clearSearch',
+  async () => {
+    return await moviesApi.getAllMovies();
   }
 )
 
@@ -128,6 +145,12 @@ const moviesSlice = createSlice({
     },
     setSearchQuery: (state, action: PayloadAction<string>) => {
       state.searchQuery = action.payload
+    },
+    clearSearch: (state) => {
+      state.searchQuery = ''
+      state.searchResults = []
+      state.isSearching = false
+      state.movies = state.allMovies
     },
     toggleShowFavoritesOnly: (state) => {
       state.showFavoritesOnly = !state.showFavoritesOnly
@@ -153,6 +176,7 @@ const moviesSlice = createSlice({
         state.loading = false
         state.error = null
         state.movies = action.payload
+        state.allMovies = action.payload
       })
       .addCase(fetchMovies.rejected, (state, action) => {
         state.loading = false
@@ -272,16 +296,34 @@ const moviesSlice = createSlice({
     // Handle searchMoviesAsync
     builder
       .addCase(searchMoviesAsync.pending, (state) => {
-        state.loading = true
+        state.isSearching = true
         state.error = null
       })
       .addCase(searchMoviesAsync.fulfilled, (state, action) => {
-        state.loading = false
+        state.isSearching = false
+        state.searchResults = action.payload
         state.movies = action.payload
       })
       .addCase(searchMoviesAsync.rejected, (state, action) => {
-        state.loading = false
+        state.isSearching = false
         state.error = action.error.message || 'Failed to search movies'
+      })
+    
+    // Handle clearSearchAsync
+    builder
+      .addCase(clearSearchAsync.pending, (state) => {
+        state.isSearching = true
+        state.error = null
+      })
+      .addCase(clearSearchAsync.fulfilled, (state, action) => {
+        state.isSearching = false
+        state.allMovies = action.payload
+        state.movies = action.payload
+        state.searchResults = []
+      })
+      .addCase(clearSearchAsync.rejected, (state, action) => {
+        state.isSearching = false
+        state.error = action.error.message || 'Failed to load movies'
       })
   },
 })
@@ -292,23 +334,17 @@ export const {
   clearError, 
   setCurrentUsername,
   setSearchQuery,
+  clearSearch,
   toggleShowFavoritesOnly,
   toggleFavoriteMovie
 } = moviesSlice.actions
 
 // Selectors
 export const selectFilteredMovies = (state: { movies: MoviesState }) => {
-  const { movies, searchQuery, showFavoritesOnly, favoriteMovieIds } = state.movies
-  let filtered = movies
-
-  // Filter by search query
-  if (searchQuery.trim()) {
-    filtered = filtered.filter(movie => 
-      movie.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      movie.director.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      movie.genre.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  }
+  const { movies, searchResults, searchQuery, showFavoritesOnly, favoriteMovieIds } = state.movies
+  
+  // Use searchResults when there's a search query, otherwise use all movies
+  let filtered = searchQuery.trim() ? searchResults : movies
 
   // Filter by favorites
   if (showFavoritesOnly) {

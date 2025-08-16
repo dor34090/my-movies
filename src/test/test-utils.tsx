@@ -78,6 +78,9 @@ export const mockInitialState: Partial<RootState> = {
     showFavoritesOnly: false,
     favoriteMovieIds: [],
     currentUsername: 'testuser',
-    favorites: []
+    favorites: [],
+    searchResults: [],
+    isSearching: false,
+    allMovies: mockMovies
   }
 }

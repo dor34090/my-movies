@@ -12,6 +12,7 @@ import {
 } from "../../styles/MoviesList"
 import type { Movie } from '../../helpers/interfaces'
 import { fetchMovies, fetchFavorites, setSearchQuery, toggleShowFavoritesOnly, selectFilteredMovies, deleteMovieAsync, addToFavoritesAsync, removeFromFavoritesAsync } from '../../store/moviesSlice'
+import { useDebouncedSearch } from '../../hooks/useDebouncedSearch'
 import MovieCard from './MovieCard'
 import MovieModal from '../movieModal/MovieModal'
 import UserConfirmationModal from '../userConfirmationModal/UserConfirmationModal'
@@ -24,10 +25,23 @@ const MoviesList = () => {
         error, 
         searchQuery, 
         showFavoritesOnly,
-        currentUsername 
+        currentUsername,
+        isSearching,
+        allMovies 
     } = useAppSelector((state) => state.movies)
     
     const filteredMovies = useAppSelector(selectFilteredMovies)
+    
+    // Use debounced search hook
+    useDebouncedSearch(searchQuery)
+
+    // Modal state
+    const [isModalOpen, setIsModalOpen] = useState(false)
+    const [editingMovie, setEditingMovie] = useState<Movie | null>(null)
+    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false)
+    const [confirmAction, setConfirmAction] = useState<'delete' | 'favorites' | null>(null)
+    const [movieToDelete, setMovieToDelete] = useState<Movie | null>(null)
+    const [pendingFavoriteAction, setPendingFavoriteAction] = useState<{ movieId: number; isFavorite: boolean } | null>(null)
 
     useEffect(() => {
         dispatch(fetchMovies())
@@ -53,23 +67,11 @@ const MoviesList = () => {
         dispatch(toggleShowFavoritesOnly())
     }
 
-    console.log("currentUsername", currentUsername)
-
-
-
     const handleFavoriteRequested = (movieId: number, isFavorite: boolean) => {
         setPendingFavoriteAction({ movieId, isFavorite })
         setConfirmAction('favorites')
         setIsConfirmModalOpen(true)
     }
-
-    // Modal state
-    const [isModalOpen, setIsModalOpen] = useState(false)
-    const [editingMovie, setEditingMovie] = useState<Movie | null>(null)
-    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false)
-    const [confirmAction, setConfirmAction] = useState<'delete' | 'favorites' | null>(null)
-    const [movieToDelete, setMovieToDelete] = useState<Movie | null>(null)
-    const [pendingFavoriteAction, setPendingFavoriteAction] = useState<{ movieId: number; isFavorite: boolean } | null>(null)
 
     const handleAddMovie = () => {
         setEditingMovie(null)
@@ -117,16 +119,18 @@ const MoviesList = () => {
                     } else {
                         await dispatch(addToFavoritesAsync({ movieId, username })).unwrap()
                     }
+                    setPendingFavoriteAction(null)
                 } catch (error) {
-                    console.error('Error toggling favorite:', error)
+                    console.error('Error updating favorite:', error)
                 }
-            } else {
-                // If no pending action, just toggle the favorites filter
+            }
+            
+            // Toggle favorites filter if that was the original action
+            if (!pendingFavoriteAction) {
                 dispatch(toggleShowFavoritesOnly())
             }
             
             setIsConfirmModalOpen(false)
-            setPendingFavoriteAction(null)
         }
         setConfirmAction(null)
     }
@@ -134,15 +138,16 @@ const MoviesList = () => {
     const handleCancelDelete = () => {
         setIsConfirmModalOpen(false)
         setMovieToDelete(null)
+        setPendingFavoriteAction(null)
         setConfirmAction(null)
     }
 
-    if (loading) {
+    if (loading && !isSearching) {
         return (
             <MoviesListContainer>
-                <MoviesListHeader>
-                    <h1>Loading Movies...</h1>
-                </MoviesListHeader>
+                <div style={{ textAlign: 'center', width: '100%', padding: '40px' }}>
+                    <h3>Loading movies...</h3>
+                </div>
             </MoviesListContainer>
         )
     }
@@ -150,63 +155,9 @@ const MoviesList = () => {
     if (error) {
         return (
             <MoviesListContainer>
-                <MoviesListHeader>
-                    <h1>Error: {error}</h1>
-                </MoviesListHeader>
-            </MoviesListContainer>
-        )
-    }
-
-    if(!movies.length) {
-        return (
-            <MoviesListContainer>
-                <MoviesListHeader>
-                    <HeaderTop>
-                        <h1>No movies available</h1>
-                        <HeaderControls>
-                            <SearchBar 
-                                type="text" 
-                                placeholder="Search movies..."
-                                value={searchQuery}
-                                onChange={handleSearchChange}
-                            />
-                            <FilterButton 
-                                active={showFavoritesOnly}
-                                onClick={handleFavoritesToggle}
-                            >
-                                <svg 
-                                    xmlns="http://www.w3.org/2000/svg" 
-                                    viewBox="0 0 24 24" 
-                                    width="16" 
-                                    height="16"
-                                >
-                                    <polygon 
-                                        points="12 2 15 8 22 9 17 14 18 21 12 18 6 21 7 14 2 9 9 8 12 2"
-                                        fill={showFavoritesOnly ? "#FFD700" : "#f0f0f0"}
-                                        stroke={showFavoritesOnly ? "#FFA500" : "#666"}
-                                        strokeWidth="2"
-                                    />
-                                </svg>
-                                {showFavoritesOnly ? 'Show All' : 'Favorites Only'}
-                            </FilterButton>
-                            <AddButton onClick={handleAddMovie}>
-                                <svg 
-                                    xmlns="http://www.w3.org/2000/svg" 
-                                    viewBox="0 0 24 24" 
-                                    width="16" 
-                                    height="16"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                >
-                                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                                </svg>
-                                Add Movie
-                            </AddButton>
-                        </HeaderControls>
-                    </HeaderTop>
-                </MoviesListHeader>
+                <div style={{ textAlign: 'center', width: '100%', padding: '40px' }}>
+                    <h3>Error: {error}</h3>
+                </div>
             </MoviesListContainer>
         )
     }
@@ -215,7 +166,7 @@ const MoviesList = () => {
         <MoviesListContainer>
             <MoviesListHeader>
                 <HeaderTop>
-                    <h1>Movies List ({filteredMovies.length} of {movies.length} movies)</h1>
+                    <h1>My Movies</h1>
                     <HeaderControls>
                         <SearchBar 
                             type="text" 
@@ -261,12 +212,19 @@ const MoviesList = () => {
                         </AddButton>
                     </HeaderControls>
                 </HeaderTop>
+                <div style={{ padding: '0 20px', color: '#666', fontSize: '14px' }}>
+                    {filteredMovies.length} of {(searchQuery.trim() ? movies.length : allMovies.length)} movies
+                </div>
             </MoviesListHeader>
             <MovieList>
-                {filteredMovies.length === 0 ? (
+                {isSearching ? (
                     <div style={{ textAlign: 'center', width: '100%', padding: '40px' }}>
-                        <h3>No movies found</h3>
-                        <p>{searchQuery ? `No movies match "${searchQuery}"` : 'No favorite movies selected'}</p>
+                        <h3>Searching movies...</h3>
+                    </div>
+                ) : filteredMovies.length === 0 ? (
+                    <div style={{ textAlign: 'center', width: '100%', padding: '40px' }}>
+                        <h3>No movies available</h3>
+                        <p>{searchQuery ? `No movies match "${searchQuery}"` : showFavoritesOnly ? 'No favorite movies selected' : 'No movies found'}</p>
                     </div>
                 ) : (
                     filteredMovies.map((movie: Movie) => (

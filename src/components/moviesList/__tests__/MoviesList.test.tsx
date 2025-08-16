@@ -13,9 +13,16 @@ vi.mock('../../../store/moviesSlice', async () => {
     fetchFavorites: vi.fn(() => ({ type: 'mock/noop' })),
     deleteMovieAsync: vi.fn(() => ({ type: 'mock/noop' })),
     addToFavoritesAsync: vi.fn(() => ({ type: 'mock/noop' })),
-    removeFromFavoritesAsync: vi.fn(() => ({ type: 'mock/noop' }))
+    removeFromFavoritesAsync: vi.fn(() => ({ type: 'mock/noop' })),
+    searchMoviesAsync: vi.fn(() => ({ type: 'mock/noop' })),
+    clearSearchAsync: vi.fn(() => ({ type: 'mock/noop' }))
   }
 })
+
+// Mock the debounced search hook
+vi.mock('../../../hooks/useDebouncedSearch', () => ({
+  useDebouncedSearch: vi.fn()
+}))
 
 // Mock the child components to focus on MoviesList logic
 vi.mock('../MovieCard', () => ({
@@ -51,12 +58,13 @@ describe('MoviesList', () => {
       ...mockInitialState,
       movies: {
         ...mockInitialState.movies!,
-        loading: true
+        loading: true,
+        isSearching: false
       }
     }
 
     renderWithProviders(<MoviesList />, { preloadedState: loadingState })
-    expect(screen.getByText('Loading Movies...')).toBeInTheDocument()
+    expect(screen.getByText('Loading movies...')).toBeInTheDocument()
   })
 
   it('shows error state', () => {
@@ -141,7 +149,8 @@ describe('MoviesList', () => {
       ...mockInitialState,
       movies: {
         ...mockInitialState.movies!,
-        searchQuery: 'Test'
+        searchQuery: 'Test',
+        searchResults: [mockInitialState.movies!.movies![0]] // Only first movie matches
       }
     }
 
@@ -169,7 +178,9 @@ describe('MoviesList', () => {
 
   it('shows correct movie count', () => {
     renderWithProviders(<MoviesList />, { preloadedState: mockInitialState })
-    expect(screen.getByText(/2.*movies/)).toBeInTheDocument()
+    expect(screen.getByText((_, element) => {
+      return element?.textContent === '2 of 2 movies'
+    })).toBeInTheDocument()
   })
 
   it('shows filtered movie count', () => {
@@ -177,12 +188,15 @@ describe('MoviesList', () => {
       ...mockInitialState,
       movies: {
         ...mockInitialState.movies!,
-        searchQuery: 'Test'
+        searchQuery: 'Test',
+        searchResults: [mockInitialState.movies!.movies![0]] // Only first movie matches
       }
     }
 
     renderWithProviders(<MoviesList />, { preloadedState: stateWithSearch })
-    expect(screen.getByText(/1.*of.*2.*movies/)).toBeInTheDocument()
+    expect(screen.getByText((_, element) => {
+      return element?.textContent === '1 of 2 movies'
+    })).toBeInTheDocument()
   })
 
   it('handles search input changes', async () => {
@@ -193,11 +207,8 @@ describe('MoviesList', () => {
     const searchInput = screen.getByPlaceholderText('Search movies...')
     await user.type(searchInput, 'Test')
 
-    // The search should filter the results
-    await waitFor(() => {
-      expect(screen.getByText('Test Movie')).toBeInTheDocument()
-      expect(screen.queryByText('Another Movie')).not.toBeInTheDocument()
-    })
+    // The search input should be updated (debounced search happens in the background)
+    expect(searchInput).toHaveValue('Test')
   })
 
   it('handles favorites filter toggle', async () => {
@@ -210,7 +221,7 @@ describe('MoviesList', () => {
 
     // Should show only favorited movies (none in this case)
     await waitFor(() => {
-      expect(screen.getByText('No movies found')).toBeInTheDocument()
+      expect(screen.getByText('No favorite movies selected')).toBeInTheDocument()
     })
   })
 

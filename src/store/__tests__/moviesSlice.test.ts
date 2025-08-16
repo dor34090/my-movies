@@ -27,7 +27,10 @@ describe('moviesSlice', () => {
     showFavoritesOnly: false,
     favoriteMovieIds: [],
     currentUsername: '',
-    favorites: []
+    favorites: [],
+    searchResults: [],
+    isSearching: false,
+    allMovies: []
   }
 
   beforeEach(() => {
